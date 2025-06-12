@@ -87,25 +87,154 @@ def check_dependencies():
     
     return True
 
-def compress_png(input_path, output_path):
-    """Compress PNG image using pngquant."""
+def validate_png(input_path):
+    """验证PNG文件格式是否正确"""
     try:
-        # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # Run pngquant with quality settings
-        cmd = [
-            'pngquant',
-            '--force',
-            '--quality=65-80',  # Adjust quality range as needed
-            '--output', output_path,
-            input_path
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
-        logger.info(f"Successfully compressed PNG: {input_path}")
+        # 使用magick命令验证PNG文件
+        cmd = ['magick', 'identify', '-verbose', input_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"PNG文件格式验证失败: {input_path}")
+            logger.error(f"错误输出: {result.stderr}")
+            return False
         return True
+    except Exception as e:
+        logger.error(f"验证PNG文件时发生错误: {str(e)}")
+        return False
+
+def compress_png(input_path, output_path, quality_ranges=None):
+    """
+    Compress PNG image using pngquant.
+    :param input_path: 输入文件路径
+    :param output_path: 输出文件路径
+    :param quality_ranges: 质量范围列表，按优先级尝试，格式如 [('50-70', '40-60', '30-50')]
+    :return: 是否成功
+    """
+    if quality_ranges is None:
+        quality_ranges = ['50-70', '40-60', '30-50']  # 默认质量范围，从高到低尝试
+        
+    try:
+        # 检查输入文件是否存在
+        if not os.path.exists(input_path):
+            logger.error(f"输入文件不存在: {input_path}")
+            return False
+            
+        # 检查输入文件是否为PNG
+        if not input_path.lower().endswith('.png'):
+            logger.error(f"输入文件不是PNG格式: {input_path}")
+            return False
+            
+        # 检查输入文件是否可读
+        if not os.access(input_path, os.R_OK):
+            logger.error(f"无法读取输入文件: {input_path}")
+            return False
+            
+        # 创建临时目录用于处理
+        temp_dir = tempfile.mkdtemp(prefix='png_compress_')
+        try:
+            # 在临时目录中创建输出文件
+            temp_output = os.path.join(temp_dir, os.path.basename(output_path))
+            
+            # 尝试不同的质量范围
+            last_error = None
+            successful_quality = None
+            
+            for quality in quality_ranges:
+                try:
+                    # Run pngquant with quality settings
+                    cmd = [
+                        'pngquant',
+                        '--force',
+                        f'--quality={quality}',
+                        '--output', temp_output,
+                        input_path
+                    ]
+                    
+                    # 执行命令并捕获详细输出
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    
+                    # 记录成功使用的质量范围
+                    successful_quality = quality
+                    
+                    # 记录压缩信息
+                    if result.stdout:
+                        logger.info(f"压缩信息: {result.stdout.strip()}")
+                    
+                    # 如果成功执行到这里，说明压缩成功
+                    break
+                except subprocess.CalledProcessError as e:
+                    last_error = e
+                    if e.returncode == 99:
+                        logger.warning(f"使用质量范围 {quality} 压缩失败，尝试下一个质量范围")
+                        if e.stdout:
+                            logger.info(f"压缩信息: {e.stdout.strip()}")
+                        continue
+                    else:
+                        raise  # 如果是其他错误，直接抛出
+            else:
+                # 如果所有质量范围都失败了
+                if last_error and last_error.returncode == 99:
+                    logger.error(f"所有质量范围都无法达到要求，使用原始文件")
+                    # 复制原始文件作为输出
+                    shutil.copy2(input_path, temp_output)
+                else:
+                    raise last_error
+            
+            # 检查临时输出文件是否成功创建
+            if not os.path.exists(temp_output):
+                logger.error(f"压缩后的文件未创建: {temp_output}")
+                return False
+                
+            # 确保输出目录存在
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+                
+            # 移动临时文件到最终位置
+            shutil.move(temp_output, output_path)
+            
+            # 检查输出文件大小
+            input_size = os.path.getsize(input_path)
+            output_size = os.path.getsize(output_path)
+            compression_ratio = (1 - output_size / input_size) * 100
+            
+            logger.info(f"成功压缩PNG: {input_path}")
+            if successful_quality:
+                logger.info(f"使用的质量范围: {successful_quality}")
+            logger.info(f"压缩率: {compression_ratio:.2f}%")
+            logger.info(f"原始大小: {input_size/1024:.2f}KB")
+            logger.info(f"压缩后大小: {output_size/1024:.2f}KB")
+            
+            return True
+            
+        finally:
+            # 清理临时目录
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                logger.warning(f"清理临时目录失败: {temp_dir}, 错误: {str(e)}")
+                
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error compressing PNG {input_path}: {e.stderr.decode()}")
+        error_msg = ""
+        if e.returncode == 99:
+            error_msg = "无法达到指定的质量要求"
+        elif e.returncode == 98:
+            error_msg = "无法创建输出文件"
+        elif e.returncode == 97:
+            error_msg = "无法读取输入文件"
+        elif e.returncode == 2:
+            error_msg = "参数错误"
+        else:
+            error_msg = f"未知错误 (代码: {e.returncode})"
+            
+        logger.error(f"PNG压缩失败 {input_path}: {error_msg}")
+        if e.stderr:
+            logger.error(f"错误输出: {e.stderr}")
+        if e.stdout:
+            logger.error(f"标准输出: {e.stdout}")
+        return False
+    except Exception as e:
+        logger.error(f"处理PNG时发生未知错误 {input_path}: {str(e)}")
         return False
 
 def compress_jpeg(input_path, output_path):
