@@ -246,7 +246,7 @@ def compress_jpeg(input_path, output_path):
         # Run cjpeg with quality settings
         cmd = [
             'cjpeg',
-            '-quality', '70',  # Adjust quality as needed
+            '-quality', '65',  # Adjust quality as needed
             '-optimize',
             '-outfile', output_path,
             input_path
