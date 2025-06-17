@@ -107,11 +107,11 @@ def compress_png(input_path, output_path, quality_ranges=None):
     Compress PNG image using pngquant.
     :param input_path: 输入文件路径
     :param output_path: 输出文件路径
-    :param quality_ranges: 质量范围列表，按优先级尝试，格式如 [('50-70', '40-60', '30-50')]
+    :param quality_ranges: 质量范围列表，按优先级尝试，格式如 [('50-70', '40-60', '30-50', '20-40', '10-30')]
     :return: 是否成功
     """
     if quality_ranges is None:
-        quality_ranges = ['50-70', '40-60', '30-50']  # 默认质量范围，从高到低尝试
+        quality_ranges = ['50-70', '40-60', '30-50', '20-40', '10-30']  # 默认质量范围，从高到低尝试
         
     try:
         # 检查输入文件是否存在
