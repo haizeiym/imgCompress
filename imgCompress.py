@@ -107,7 +107,7 @@ def compress_png(input_path, output_path, quality_ranges=None):
     Compress PNG image using pngquant.
     :param input_path: 输入文件路径
     :param output_path: 输出文件路径
-    :param quality_ranges: 质量范围列表，按优先级尝试，格式如 [('50-70', '40-60', '30-50', '20-40', '10-30')]
+    :param quality_ranges: 质量范围列表，按优先级尝试，格式如 ['50-70', '40-60', '30-50', '20-40', '10-30']
     :return: 是否成功
     """
     if quality_ranges is None:
@@ -258,7 +258,7 @@ def compress_jpeg(input_path, output_path):
         logger.error(f"Error compressing JPEG {input_path}: {e.stderr.decode()}")
         return False
 
-def process_directory(input_dir, output_dir, replace_original=False):
+def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None):
     """Process all PNG and JPEG images in the directory and its subdirectories."""
     input_path = Path(input_dir)
     
@@ -277,7 +277,7 @@ def process_directory(input_dir, output_dir, replace_original=False):
                     
                     # Process PNG files
                     if file.lower().endswith('.png'):
-                        if compress_png(str(input_file), str(temp_file)):
+                        if compress_png(str(input_file), str(temp_file), quality_ranges):
                             # Replace original with compressed version
                             shutil.move(str(temp_file), str(input_file))
                     # Process JPEG files
@@ -300,7 +300,7 @@ def process_directory(input_dir, output_dir, replace_original=False):
                 
                 # Process PNG files
                 if file.lower().endswith('.png'):
-                    compress_png(str(input_file), str(output_file))
+                    compress_png(str(input_file), str(output_file), quality_ranges)
                 # Process JPEG files
                 elif file.lower().endswith(('.jpg', '.jpeg')):
                     compress_jpeg(str(input_file), str(output_file))
@@ -317,11 +317,18 @@ def main():
     parser.add_argument('-r', '--replace',
                       help='Replace original files with compressed versions',
                       action='store_true')
+    parser.add_argument('-qr', '--quality-ranges',
+                      help='PNG compression quality ranges, comma-separated (e.g., "50-70,40-60,30-50,20-40,10-30")',
+                      default='50-70,40-60,30-50,20-40,10-30')
     
     args = parser.parse_args()
     
     if not check_dependencies():
         sys.exit(1)
+    
+    # Parse quality ranges
+    quality_ranges = [q.strip() for q in args.quality_ranges.split(',')]
+    logger.info(f"PNG compression quality ranges: {quality_ranges}")
     
     # Get input directory
     input_dir = os.path.abspath(args.input)
@@ -339,7 +346,7 @@ def main():
     else:
         logger.info("Mode: Replace original files")
     
-    process_directory(input_dir, output_dir, args.replace)
+    process_directory(input_dir, output_dir, args.replace, quality_ranges)
     logger.info("Compression process completed!")
 
 if __name__ == "__main__":
