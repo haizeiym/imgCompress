@@ -258,7 +258,18 @@ def compress_jpeg(input_path, output_path):
         logger.error(f"Error compressing JPEG {input_path}: {e.stderr.decode()}")
         return False
 
-def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None):
+def should_skip_path(path, exclude_patterns=None):
+    """Check if a path should be skipped based on exclude patterns."""
+    if not exclude_patterns:
+        return False
+    
+    path_str = str(path)
+    for pattern in exclude_patterns:
+        if pattern in path_str:
+            return True
+    return False
+
+def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None, exclude_patterns=None):
     """Process all PNG and JPEG images in the directory and its subdirectories."""
     input_path = Path(input_dir)
     
@@ -268,9 +279,18 @@ def process_directory(input_dir, output_dir, replace_original=False, quality_ran
             temp_path = Path(temp_dir)
             
             # Walk through all files in the input directory
-            for root, _, files in os.walk(input_path):
+            for root, dirs, files in os.walk(input_path):
+                # Filter out excluded directories
+                dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
+                
                 for file in files:
                     input_file = Path(root) / file
+                    
+                    # Skip if file matches exclude patterns
+                    if should_skip_path(input_file, exclude_patterns):
+                        logger.info(f"跳过文件 (匹配排除模式): {input_file}")
+                        continue
+                    
                     # Calculate relative path for temp file
                     rel_path = input_file.relative_to(input_path)
                     temp_file = temp_path / rel_path
@@ -291,9 +311,18 @@ def process_directory(input_dir, output_dir, replace_original=False, quality_ran
         output_path.mkdir(parents=True, exist_ok=True)
         
         # Walk through all files in the input directory
-        for root, _, files in os.walk(input_path):
+        for root, dirs, files in os.walk(input_path):
+            # Filter out excluded directories
+            dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
+            
             for file in files:
                 input_file = Path(root) / file
+                
+                # Skip if file matches exclude patterns
+                if should_skip_path(input_file, exclude_patterns):
+                    logger.info(f"跳过文件 (匹配排除模式): {input_file}")
+                    continue
+                
                 # Calculate relative path for output
                 rel_path = input_file.relative_to(input_path)
                 output_file = output_path / rel_path
@@ -320,6 +349,9 @@ def main():
     parser.add_argument('-qr', '--quality-ranges',
                       help='PNG compression quality ranges, comma-separated (e.g., "50-70,40-60,30-50,20-40,10-30")',
                       default='50-70,40-60,30-50,20-40,10-30')
+    parser.add_argument('-e', '--exclude',
+                      help='Exclude patterns (comma-separated). Files or folders containing these patterns will be skipped.',
+                      default='')
     
     args = parser.parse_args()
     
@@ -329,6 +361,11 @@ def main():
     # Parse quality ranges
     quality_ranges = [q.strip() for q in args.quality_ranges.split(',')]
     logger.info(f"PNG compression quality ranges: {quality_ranges}")
+    
+    # Parse exclude patterns
+    exclude_patterns = [p.strip() for p in args.exclude.split(',') if p.strip()]
+    if exclude_patterns:
+        logger.info(f"Exclude patterns: {exclude_patterns}")
     
     # Get input directory
     input_dir = os.path.abspath(args.input)
@@ -346,7 +383,7 @@ def main():
     else:
         logger.info("Mode: Replace original files")
     
-    process_directory(input_dir, output_dir, args.replace, quality_ranges)
+    process_directory(input_dir, output_dir, args.replace, quality_ranges, exclude_patterns)
     logger.info("Compression process completed!")
 
 if __name__ == "__main__":
