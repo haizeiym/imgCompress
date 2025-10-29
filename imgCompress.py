@@ -258,15 +258,54 @@ def compress_jpeg(input_path, output_path):
         logger.error(f"Error compressing JPEG {input_path}: {e.stderr.decode()}")
         return False
 
+def extract_base_name(filename):
+    """
+    提取文件的基础名称（去掉中间后缀和扩展名）
+    例如: 3ff2a7d9-db1f-4660-9aae-5313ac9a9c84.77f41.png -> 3ff2a7d9-db1f-4660-9aae-5313ac9a9c84
+    """
+    # 获取文件名（不包括路径）
+    base = Path(filename).stem  # 获取不带扩展名的文件名
+    # 移除中间后缀（如果存在多个点分隔的部分，只保留第一部分）
+    # UUID格式通常是 8-4-4-4-12，共36个字符
+    # 如果文件名以UUID开头，并且后面有点，则只取UUID部分
+    parts = base.split('.')
+    if len(parts) > 1:
+        # 检查第一部分是否是UUID格式（36个字符）
+        if len(parts[0]) == 36 and '-' in parts[0]:
+            return parts[0]
+    return base
+
 def should_skip_path(path, exclude_patterns=None):
     """Check if a path should be skipped based on exclude patterns."""
     if not exclude_patterns:
         return False
     
+    path_obj = Path(path)
     path_str = str(path)
+    
+    # 如果是文件，提取文件名的基础名称
+    if path_obj.is_file() or path_obj.suffix:
+        file_base_name = extract_base_name(path_obj.name)
+    else:
+        # 如果是目录，直接使用目录名
+        file_base_name = path_obj.name
+    
     for pattern in exclude_patterns:
-        if pattern in path_str:
+        # 提取模式的基础名称（可能包含路径）
+        pattern_parts = str(pattern).split(os.sep)
+        pattern_base = pattern_parts[-1] if pattern_parts else pattern
+        pattern_base_name = extract_base_name(pattern_base)
+        
+        # 比较基础名称
+        if file_base_name == pattern_base_name:
             return True
+        
+        # 如果模式包含路径，也检查完整路径匹配
+        if os.sep in pattern or '/' in pattern:
+            # 检查路径是否包含模式
+            if pattern in path_str:
+                return True
+    
     return False
 
 def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None, exclude_patterns=None):
