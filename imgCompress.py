@@ -11,10 +11,34 @@ import platform
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
+
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
+
+def print_progress(current, total):
+    if total <= 0:
+        percent = 100.0 if current else 0.0
+        total = max(total, 0)
+    else:
+        percent = current / total * 100
+    sys.stdout.write(f"\r处理进度: {current}/{total} ({percent:.1f}%)")
+    sys.stdout.flush()
+
+def gather_image_files(input_dir, exclude_patterns=None):
+    files = []
+    for root, dirs, filenames in os.walk(input_dir):
+        dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
+        for name in filenames:
+            file_path = Path(root) / name
+            if should_skip_path(file_path, exclude_patterns):
+                continue
+            if file_path.suffix.lower() in IMAGE_EXTENSIONS:
+                files.append(file_path)
+    return files
 
 def get_installation_instructions():
     """Get installation instructions based on the operating system."""
@@ -309,69 +333,51 @@ def should_skip_path(path, exclude_patterns=None):
     return False
 
 def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None, exclude_patterns=None):
-    """Process all PNG and JPEG images in the directory and its subdirectories."""
     input_path = Path(input_dir)
-    
+    files_to_process = gather_image_files(input_path, exclude_patterns)
+    total = len(files_to_process)
+    print_progress(0, total)
+
+    if total == 0:
+        print()
+        return
+
     if replace_original:
-        # Create a temporary directory for intermediate files
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            
-            # Walk through all files in the input directory
-            for root, dirs, files in os.walk(input_path):
-                # Filter out excluded directories
-                dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
-                
-                for file in files:
-                    input_file = Path(root) / file
-                    
-                    # Skip if file matches exclude patterns
-                    if should_skip_path(input_file, exclude_patterns):
-                        logger.info(f"跳过文件 (匹配排除模式): {input_file}")
-                        continue
-                    
-                    # Calculate relative path for temp file
-                    rel_path = input_file.relative_to(input_path)
-                    temp_file = temp_path / rel_path
-                    
-                    # Process PNG files
-                    if file.lower().endswith('.png'):
-                        if compress_png(str(input_file), str(temp_file), quality_ranges):
-                            # Replace original with compressed version
-                            shutil.move(str(temp_file), str(input_file))
-                    # Process JPEG files
-                    elif file.lower().endswith(('.jpg', '.jpeg')):
-                        if compress_jpeg(str(input_file), str(temp_file)):
-                            # Replace original with compressed version
-                            shutil.move(str(temp_file), str(input_file))
+            for idx, input_file in enumerate(files_to_process, start=1):
+                rel_path = input_file.relative_to(input_path)
+                temp_file = temp_path / rel_path
+                temp_file.parent.mkdir(parents=True, exist_ok=True)
+
+                if input_file.suffix.lower() == '.png':
+                    success = compress_png(str(input_file), str(temp_file), quality_ranges)
+                else:
+                    success = compress_jpeg(str(input_file), str(temp_file))
+
+                if success and temp_file.exists():
+                    shutil.move(str(temp_file), str(input_file))
+                elif temp_file.exists():
+                    temp_file.unlink()
+
+                print_progress(idx, total)
     else:
         output_path = Path(output_dir)
-        # Create output directory if it doesn't exist
         output_path.mkdir(parents=True, exist_ok=True)
-        
-        # Walk through all files in the input directory
-        for root, dirs, files in os.walk(input_path):
-            # Filter out excluded directories
-            dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
-            
-            for file in files:
-                input_file = Path(root) / file
-                
-                # Skip if file matches exclude patterns
-                if should_skip_path(input_file, exclude_patterns):
-                    logger.info(f"跳过文件 (匹配排除模式): {input_file}")
-                    continue
-                
-                # Calculate relative path for output
-                rel_path = input_file.relative_to(input_path)
-                output_file = output_path / rel_path
-                
-                # Process PNG files
-                if file.lower().endswith('.png'):
-                    compress_png(str(input_file), str(output_file), quality_ranges)
-                # Process JPEG files
-                elif file.lower().endswith(('.jpg', '.jpeg')):
-                    compress_jpeg(str(input_file), str(output_file))
+
+        for idx, input_file in enumerate(files_to_process, start=1):
+            rel_path = input_file.relative_to(input_path)
+            output_file = output_path / rel_path
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            if input_file.suffix.lower() == '.png':
+                compress_png(str(input_file), str(output_file), quality_ranges)
+            else:
+                compress_jpeg(str(input_file), str(output_file))
+
+            print_progress(idx, total)
+
+    print()
 
 def main():
     """Main function to handle the compression process."""
