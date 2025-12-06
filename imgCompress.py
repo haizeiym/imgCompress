@@ -98,10 +98,11 @@ def check_dependencies():
         missing_tools.append('pngquant')
     
     # Check cjpeg (mozjpeg)
-    try:
-        subprocess.run(['cjpeg', '-version'], capture_output=True, check=True, shell=False)
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        missing_tools.append('cjpeg (mozjpeg)')
+    if platform.system() != 'Windows':
+        try:
+            subprocess.run(['cjpeg', '-version'], capture_output=True, check=True, shell=False)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            missing_tools.append('cjpeg (mozjpeg)')
     
     if missing_tools:
         logger.error("缺少必要的工具: " + ", ".join(missing_tools))
@@ -267,15 +268,19 @@ def compress_jpeg(input_path, output_path):
         # Create output directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-            # Run cjpeg with quality settings
-            cmd = [
-                'cjpeg' if platform.system() != 'Windows' else 'cjpeg.exe',
-                '-quality', '65',  # Adjust quality as needed
-                '-optimize',
-                '-outfile', output_path,
-                input_path
-            ]
-            subprocess.run(cmd, check=True, capture_output=True, shell=False)
+        if platform.system() == 'Windows':
+            shutil.copy2(input_path, output_path)
+            return True
+
+        # Run cjpeg with quality settings
+        cmd = [
+            'cjpeg',
+            '-quality', '65',  # Adjust quality as needed
+            '-optimize',
+            '-outfile', output_path,
+            input_path
+        ]
+        subprocess.run(cmd, check=True, capture_output=True, shell=False)
         logger.info(f"Successfully compressed JPEG: {input_path}")
         return True
     except subprocess.CalledProcessError as e:
