@@ -93,13 +93,13 @@ def check_dependencies():
     
     # Check pngquant
     try:
-        subprocess.run(['pngquant', '--version'], capture_output=True, check=True)
+        subprocess.run(['pngquant', '--version'], capture_output=True, check=True, shell=False)
     except (subprocess.CalledProcessError, FileNotFoundError):
         missing_tools.append('pngquant')
     
     # Check cjpeg (mozjpeg)
     try:
-        subprocess.run(['cjpeg', '-version'], capture_output=True, check=True)
+        subprocess.run(['cjpeg', '-version'], capture_output=True, check=True, shell=False)
     except (subprocess.CalledProcessError, FileNotFoundError):
         missing_tools.append('cjpeg (mozjpeg)')
     
@@ -116,7 +116,7 @@ def validate_png(input_path):
     try:
         # 使用magick命令验证PNG文件
         cmd = ['magick', 'identify', '-verbose', input_path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
         if result.returncode != 0:
             logger.error(f"PNG文件格式验证失败: {input_path}")
             logger.error(f"错误输出: {result.stderr}")
@@ -175,7 +175,7 @@ def compress_png(input_path, output_path, quality_ranges=None):
                     ]
                     
                     # 执行命令并捕获详细输出
-                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=False)
                     
                     # 记录成功使用的质量范围
                     successful_quality = quality
@@ -267,15 +267,15 @@ def compress_jpeg(input_path, output_path):
         # Create output directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # Run cjpeg with quality settings
-        cmd = [
-            'cjpeg',
-            '-quality', '65',  # Adjust quality as needed
-            '-optimize',
-            '-outfile', output_path,
-            input_path
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
+            # Run cjpeg with quality settings
+            cmd = [
+                'cjpeg' if platform.system() != 'Windows' else 'cjpeg.exe',
+                '-quality', '65',  # Adjust quality as needed
+                '-optimize',
+                '-outfile', output_path,
+                input_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True, shell=False)
         logger.info(f"Successfully compressed JPEG: {input_path}")
         return True
     except subprocess.CalledProcessError as e:
