@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-import os
-import subprocess
-import logging
-from pathlib import Path
-import shutil
 import argparse
-import tempfile
-import sys
+import logging
+import os
 import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+
 
 def print_progress(current, total):
     if total <= 0:
@@ -28,10 +28,13 @@ def print_progress(current, total):
     sys.stdout.write(f"\r处理进度: {current}/{total} ({percent:.1f}%)")
     sys.stdout.flush()
 
+
 def gather_image_files(input_dir, exclude_patterns=None):
     files = []
     for root, dirs, filenames in os.walk(input_dir):
-        dirs[:] = [d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)]
+        dirs[:] = [
+            d for d in dirs if not should_skip_path(Path(root) / d, exclude_patterns)
+        ]
         for name in filenames:
             file_path = Path(root) / name
             if should_skip_path(file_path, exclude_patterns):
@@ -40,10 +43,11 @@ def gather_image_files(input_dir, exclude_patterns=None):
                 files.append(file_path)
     return files
 
+
 def get_installation_instructions():
     """Get installation instructions based on the operating system."""
     system = platform.system().lower()
-    if system == 'darwin':  # macOS
+    if system == "darwin":  # macOS
         return """
 请使用 Homebrew 安装所需工具：
 1. 安装 Homebrew（如果尚未安装）:
@@ -53,7 +57,7 @@ def get_installation_instructions():
 3. 安装 mozjpeg:
    brew install mozjpeg
 """
-    elif system == 'linux':
+    elif system == "linux":
         return """
 请使用包管理器安装所需工具：
 
@@ -70,7 +74,7 @@ Arch Linux:
 sudo pacman -S pngquant
 sudo pacman -S mozjpeg
 """
-    elif system == 'windows':
+    elif system == "windows":
         return """
 请使用以下方法安装所需工具：
 
@@ -87,36 +91,42 @@ sudo pacman -S mozjpeg
     else:
         return "请访问 https://pngquant.org/ 和 https://github.com/mozilla/mozjpeg 获取安装说明"
 
+
 def check_dependencies():
     """Check if required tools are installed."""
     missing_tools = []
-    
+
     # Check pngquant
     try:
-        subprocess.run(['pngquant', '--version'], capture_output=True, check=True, shell=False)
+        subprocess.run(
+            ["pngquant", "--version"], capture_output=True, check=True, shell=False
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        missing_tools.append('pngquant')
-    
+        missing_tools.append("pngquant")
+
     # Check cjpeg (mozjpeg)
-    if platform.system() != 'Windows':
+    if platform.system() != "Windows":
         try:
-            subprocess.run(['cjpeg', '-version'], capture_output=True, check=True, shell=False)
+            subprocess.run(
+                ["cjpeg", "-version"], capture_output=True, check=True, shell=False
+            )
         except (subprocess.CalledProcessError, FileNotFoundError):
-            missing_tools.append('cjpeg (mozjpeg)')
-    
+            missing_tools.append("cjpeg (mozjpeg)")
+
     if missing_tools:
         logger.error("缺少必要的工具: " + ", ".join(missing_tools))
         logger.error("请安装以下工具后再运行脚本：")
         logger.error(get_installation_instructions())
         return False
-    
+
     return True
+
 
 def validate_png(input_path):
     """验证PNG文件格式是否正确"""
     try:
         # 使用magick命令验证PNG文件
-        cmd = ['magick', 'identify', '-verbose', input_path]
+        cmd = ["magick", "identify", "-verbose", input_path]
         result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
         if result.returncode != 0:
             logger.error(f"PNG文件格式验证失败: {input_path}")
@@ -127,6 +137,7 @@ def validate_png(input_path):
         logger.error(f"验证PNG文件时发生错误: {str(e)}")
         return False
 
+
 def compress_png(input_path, output_path, quality_ranges=None):
     """
     Compress PNG image using pngquant.
@@ -136,61 +147,72 @@ def compress_png(input_path, output_path, quality_ranges=None):
     :return: 是否成功
     """
     if quality_ranges is None:
-        quality_ranges = ['50-70', '40-60', '30-50', '20-40', '10-30']  # 默认质量范围，从高到低尝试
-        
+        quality_ranges = [
+            "50-70",
+            "40-60",
+            "30-50",
+            "20-40",
+            "10-30",
+        ]  # 默认质量范围，从高到低尝试
+
     try:
         # 检查输入文件是否存在
         if not os.path.exists(input_path):
             logger.error(f"输入文件不存在: {input_path}")
             return False
-            
+
         # 检查输入文件是否为PNG
-        if not input_path.lower().endswith('.png'):
+        if not input_path.lower().endswith(".png"):
             logger.error(f"输入文件不是PNG格式: {input_path}")
             return False
-            
+
         # 检查输入文件是否可读
         if not os.access(input_path, os.R_OK):
             logger.error(f"无法读取输入文件: {input_path}")
             return False
-            
+
         # 创建临时目录用于处理
-        temp_dir = tempfile.mkdtemp(prefix='png_compress_')
+        temp_dir = tempfile.mkdtemp(prefix="png_compress_")
         try:
             # 在临时目录中创建输出文件
             temp_output = os.path.join(temp_dir, os.path.basename(output_path))
-            
+
             # 尝试不同的质量范围
             last_error = None
             successful_quality = None
-            
+
             for quality in quality_ranges:
                 try:
                     # Run pngquant with quality settings
                     cmd = [
-                        'pngquant',
-                        '--force',
-                        f'--quality={quality}',
-                        '--output', temp_output,
-                        input_path
+                        "pngquant",
+                        "--force",
+                        f"--quality={quality}",
+                        "--output",
+                        temp_output,
+                        input_path,
                     ]
-                    
+
                     # 执行命令并捕获详细输出
-                    result = subprocess.run(cmd, check=True, capture_output=True, text=True, shell=False)
-                    
+                    result = subprocess.run(
+                        cmd, check=True, capture_output=True, text=True, shell=False
+                    )
+
                     # 记录成功使用的质量范围
                     successful_quality = quality
-                    
+
                     # 记录压缩信息
                     if result.stdout:
                         logger.info(f"压缩信息: {result.stdout.strip()}")
-                    
+
                     # 如果成功执行到这里，说明压缩成功
                     break
                 except subprocess.CalledProcessError as e:
                     last_error = e
                     if e.returncode == 99:
-                        logger.warning(f"使用质量范围 {quality} 压缩失败，尝试下一个质量范围")
+                        logger.warning(
+                            f"使用质量范围 {quality} 压缩失败，尝试下一个质量范围"
+                        )
                         if e.stdout:
                             logger.info(f"压缩信息: {e.stdout.strip()}")
                         continue
@@ -199,46 +221,46 @@ def compress_png(input_path, output_path, quality_ranges=None):
             else:
                 # 如果所有质量范围都失败了
                 if last_error and last_error.returncode == 99:
-                    logger.error(f"所有质量范围都无法达到要求，使用原始文件")
+                    logger.error("所有质量范围都无法达到要求，使用原始文件")
                     # 复制原始文件作为输出
                     shutil.copy2(input_path, temp_output)
                 else:
                     raise last_error
-            
+
             # 检查临时输出文件是否成功创建
             if not os.path.exists(temp_output):
                 logger.error(f"压缩后的文件未创建: {temp_output}")
                 return False
-                
+
             # 确保输出目录存在
             output_dir = os.path.dirname(output_path)
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
-                
+
             # 移动临时文件到最终位置
             shutil.move(temp_output, output_path)
-            
+
             # 检查输出文件大小
             input_size = os.path.getsize(input_path)
             output_size = os.path.getsize(output_path)
             compression_ratio = (1 - output_size / input_size) * 100
-            
+
             logger.info(f"成功压缩PNG: {input_path}")
             if successful_quality:
                 logger.info(f"使用的质量范围: {successful_quality}")
             logger.info(f"压缩率: {compression_ratio:.2f}%")
-            logger.info(f"原始大小: {input_size/1024:.2f}KB")
-            logger.info(f"压缩后大小: {output_size/1024:.2f}KB")
-            
+            logger.info(f"原始大小: {input_size / 1024:.2f}KB")
+            logger.info(f"压缩后大小: {output_size / 1024:.2f}KB")
+
             return True
-            
+
         finally:
             # 清理临时目录
             try:
                 shutil.rmtree(temp_dir)
             except Exception as e:
                 logger.warning(f"清理临时目录失败: {temp_dir}, 错误: {str(e)}")
-                
+
     except subprocess.CalledProcessError as e:
         error_msg = ""
         if e.returncode == 99:
@@ -251,7 +273,7 @@ def compress_png(input_path, output_path, quality_ranges=None):
             error_msg = "参数错误"
         else:
             error_msg = f"未知错误 (代码: {e.returncode})"
-            
+
         logger.error(f"PNG压缩失败 {input_path}: {error_msg}")
         if e.stderr:
             logger.error(f"错误输出: {e.stderr}")
@@ -262,23 +284,26 @@ def compress_png(input_path, output_path, quality_ranges=None):
         logger.error(f"处理PNG时发生未知错误 {input_path}: {str(e)}")
         return False
 
+
 def compress_jpeg(input_path, output_path):
     """Compress JPEG image using cjpeg (mozjpeg)."""
     try:
         # Create output directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        if platform.system() == 'Windows':
+
+        if platform.system() == "Windows":
             shutil.copy2(input_path, output_path)
             return True
 
         # Run cjpeg with quality settings
         cmd = [
-            'cjpeg',
-            '-quality', '65',  # Adjust quality as needed
-            '-optimize',
-            '-outfile', output_path,
-            input_path
+            "cjpeg",
+            "-quality",
+            "65",  # Adjust quality as needed
+            "-optimize",
+            "-outfile",
+            output_path,
+            input_path,
         ]
         subprocess.run(cmd, check=True, capture_output=True, shell=False)
         logger.info(f"Successfully compressed JPEG: {input_path}")
@@ -286,6 +311,7 @@ def compress_jpeg(input_path, output_path):
     except subprocess.CalledProcessError as e:
         logger.error(f"Error compressing JPEG {input_path}: {e.stderr.decode()}")
         return False
+
 
 def extract_base_name(filename):
     """
@@ -297,47 +323,55 @@ def extract_base_name(filename):
     # 移除中间后缀（如果存在多个点分隔的部分，只保留第一部分）
     # UUID格式通常是 8-4-4-4-12，共36个字符
     # 如果文件名以UUID开头，并且后面有点，则只取UUID部分
-    parts = base.split('.')
+    parts = base.split(".")
     if len(parts) > 1:
         # 检查第一部分是否是UUID格式（36个字符）
-        if len(parts[0]) == 36 and '-' in parts[0]:
+        if len(parts[0]) == 36 and "-" in parts[0]:
             return parts[0]
     return base
+
 
 def should_skip_path(path, exclude_patterns=None):
     """Check if a path should be skipped based on exclude patterns."""
     if not exclude_patterns:
         return False
-    
+
     path_obj = Path(path)
     path_str = str(path)
-    
+
     # 如果是文件，提取文件名的基础名称
     if path_obj.is_file() or path_obj.suffix:
         file_base_name = extract_base_name(path_obj.name)
     else:
         # 如果是目录，直接使用目录名
         file_base_name = path_obj.name
-    
+
     for pattern in exclude_patterns:
         # 提取模式的基础名称（可能包含路径）
         pattern_parts = str(pattern).split(os.sep)
         pattern_base = pattern_parts[-1] if pattern_parts else pattern
         pattern_base_name = extract_base_name(pattern_base)
-        
+
         # 比较基础名称
         if file_base_name == pattern_base_name:
             return True
-        
+
         # 如果模式包含路径，也检查完整路径匹配
-        if os.sep in pattern or '/' in pattern:
+        if os.sep in pattern or "/" in pattern:
             # 检查路径是否包含模式
             if pattern in path_str:
                 return True
-    
+
     return False
 
-def process_directory(input_dir, output_dir, replace_original=False, quality_ranges=None, exclude_patterns=None):
+
+def process_directory(
+    input_dir,
+    output_dir,
+    replace_original=False,
+    quality_ranges=None,
+    exclude_patterns=None,
+):
     input_path = Path(input_dir)
     files_to_process = gather_image_files(input_path, exclude_patterns)
     total = len(files_to_process)
@@ -355,8 +389,10 @@ def process_directory(input_dir, output_dir, replace_original=False, quality_ran
                 temp_file = temp_path / rel_path
                 temp_file.parent.mkdir(parents=True, exist_ok=True)
 
-                if input_file.suffix.lower() == '.png':
-                    success = compress_png(str(input_file), str(temp_file), quality_ranges)
+                if input_file.suffix.lower() == ".png":
+                    success = compress_png(
+                        str(input_file), str(temp_file), quality_ranges
+                    )
                 else:
                     success = compress_jpeg(str(input_file), str(temp_file))
 
@@ -375,7 +411,7 @@ def process_directory(input_dir, output_dir, replace_original=False, quality_ran
             output_file = output_path / rel_path
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
-            if input_file.suffix.lower() == '.png':
+            if input_file.suffix.lower() == ".png":
                 compress_png(str(input_file), str(output_file), quality_ranges)
             else:
                 compress_jpeg(str(input_file), str(output_file))
@@ -384,57 +420,78 @@ def process_directory(input_dir, output_dir, replace_original=False, quality_ran
 
     print()
 
+
 def main():
     """Main function to handle the compression process."""
-    parser = argparse.ArgumentParser(description='Compress PNG and JPEG images using pngquant and mozjpeg')
-    parser.add_argument('-i', '--input', 
-                      help='Input directory containing images to compress (default: current directory)',
-                      default=os.getcwd())
-    parser.add_argument('-o', '--output',
-                      help='Output directory for compressed images (default: input_directory/compressed)',
-                      default=None)
-    parser.add_argument('-r', '--replace',
-                      help='Replace original files with compressed versions',
-                      action='store_true')
-    parser.add_argument('-qr', '--quality-ranges',
-                      help='PNG compression quality ranges, comma-separated (e.g., "50-70,40-60,30-50,20-40,10-30")',
-                      default='50-70,40-60,30-50,20-40,10-30')
-    parser.add_argument('-e', '--exclude',
-                      help='Exclude patterns (comma-separated). Files or folders containing these patterns will be skipped.',
-                      default='')
-    
+    parser = argparse.ArgumentParser(
+        description="Compress PNG and JPEG images using pngquant and mozjpeg"
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        help="Input directory containing images to compress (default: current directory)",
+        default=os.getcwd(),
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help="Output directory for compressed images (default: input_directory/compressed)",
+        default=None,
+    )
+    parser.add_argument(
+        "-r",
+        "--replace",
+        help="Replace original files with compressed versions",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-qr",
+        "--quality-ranges",
+        help='PNG compression quality ranges, comma-separated (e.g., "50-70,40-60,30-50,20-40,10-30")',
+        default="50-70,40-60,30-50,20-40,10-30",
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        help="Exclude patterns (comma-separated). Files or folders containing these patterns will be skipped.",
+        default="",
+    )
+
     args = parser.parse_args()
-    
+
     if not check_dependencies():
         sys.exit(1)
-    
+
     # Parse quality ranges
-    quality_ranges = [q.strip() for q in args.quality_ranges.split(',')]
+    quality_ranges = [q.strip() for q in args.quality_ranges.split(",")]
     logger.info(f"PNG compression quality ranges: {quality_ranges}")
-    
+
     # Parse exclude patterns
-    exclude_patterns = [p.strip() for p in args.exclude.split(',') if p.strip()]
+    exclude_patterns = [p.strip() for p in args.exclude.split(",") if p.strip()]
     if exclude_patterns:
         logger.info(f"Exclude patterns: {exclude_patterns}")
-    
+
     # Get input directory
     input_dir = os.path.abspath(args.input)
-    
+
     # Set output directory
     if args.output:
         output_dir = os.path.abspath(args.output)
     else:
-        output_dir = os.path.join(input_dir, 'compressed')
-    
-    logger.info(f"Starting compression process...")
+        output_dir = os.path.join(input_dir, "compressed")
+
+    logger.info("Starting compression process...")
     logger.info(f"Input directory: {input_dir}")
     if not args.replace:
         logger.info(f"Output directory: {output_dir}")
     else:
         logger.info("Mode: Replace original files")
-    
-    process_directory(input_dir, output_dir, args.replace, quality_ranges, exclude_patterns)
+
+    process_directory(
+        input_dir, output_dir, args.replace, quality_ranges, exclude_patterns
+    )
     logger.info("Compression process completed!")
+
 
 if __name__ == "__main__":
     main()
