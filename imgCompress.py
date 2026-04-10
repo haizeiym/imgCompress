@@ -57,23 +57,6 @@ def get_installation_instructions():
 3. 安装 mozjpeg:
    brew install mozjpeg
 """
-    elif system == "linux":
-        return """
-请使用包管理器安装所需工具：
-
-Ubuntu/Debian:
-sudo apt-get update
-sudo apt-get install pngquant
-sudo apt-get install mozjpeg
-
-CentOS/RHEL:
-sudo yum install pngquant
-sudo yum install mozjpeg
-
-Arch Linux:
-sudo pacman -S pngquant
-sudo pacman -S mozjpeg
-"""
     elif system == "windows":
         return """
 请使用以下方法安装所需工具：
